@@ -30,6 +30,7 @@ from cjm_plugin_system.utils.validation import (
     SCHEMA_TITLE, SCHEMA_DESC, SCHEMA_MIN, SCHEMA_MAX, SCHEMA_ENUM
 )
 from .meta import get_plugin_metadata
+from cjm_plugin_system.core.errors import PluginFatalError
 
 # Silero Imports
 try:
@@ -149,7 +150,9 @@ class SileroVADPlugin(MediaAnalysisPlugin):
         """Lazy load the Silero model."""
         if self._model is None:
             if not SILERO_AVAILABLE:
-                raise ImportError("silero-vad not installed.")
+                raise PluginFatalError(  # SG-47: load-time dependency missing — fatal until operator installs silero-vad
+                    "silero-vad not installed.",
+                )
             self.logger.info("Loading Silero VAD model")
             self._model = load_silero_vad(onnx=self.config.use_onnx)
             self.logger.info("Silero VAD model loaded successfully")
