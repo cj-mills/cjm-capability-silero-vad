@@ -31,6 +31,7 @@ from cjm_plugin_system.utils.validation import (
 )
 from .meta import get_plugin_metadata
 from cjm_plugin_system.core.errors import PluginFatalError
+from cjm_plugin_system.core.interface import RELOAD_TRIGGER
 
 # Silero Imports
 try:
@@ -93,7 +94,8 @@ class SileroVADConfig:
         default=True,
         metadata={
             SCHEMA_TITLE: "Use ONNX",
-            SCHEMA_DESC: "Use ONNX runtime for inference (faster)."
+            SCHEMA_DESC: "Use ONNX runtime for inference (faster).",
+            RELOAD_TRIGGER: "model"  # CR-4: switching backend invalidates the loaded model
         }
     )
 
@@ -133,14 +135,24 @@ class SileroVADPlugin(MediaAnalysisPlugin):
         """Return JSON Schema for UI generation."""
         return dataclass_to_jsonschema(SileroVADConfig)
 
+    def _apply_config(
+        self,
+        config: Optional[Any] = None  # Configuration dataclass, dict, or None
+    ) -> None:
+        """CR-4: apply config values only (no heavy-resource work). Called by
+        initialize (first-time) and by the substrate's reconfigure delta path."""
+        self.config = dict_to_config(SileroVADConfig, config or {})
+
     def initialize(
         self,
         config: Optional[Any] = None  # Configuration dataclass, dict, or None
     ) -> None:
-        """Initialize or re-configure the plugin (idempotent)."""
-        self.config = dict_to_config(SileroVADConfig, config or {})
+        """First-time setup. CR-4: config application is factored into _apply_config;
+        the substrate's reconfigure(old, new) handles deltas - it fires _release_model
+        on a use_onnx change (RELOAD_TRIGGER) then re-applies config."""
+        self._apply_config(config)
         
-        # Initialize standardized storage
+        # Initialize standardized storage (one-time)
         db_path = get_plugin_metadata()["db_path"]
         self.storage = MediaAnalysisStorage(db_path)
         
@@ -156,6 +168,14 @@ class SileroVADPlugin(MediaAnalysisPlugin):
             self.logger.info("Loading Silero VAD model")
             self._model = load_silero_vad(onnx=self.config.use_onnx)
             self.logger.info("Silero VAD model loaded successfully")
+
+    def _release_model(self) -> None:
+        """CR-4: release the loaded VAD model. RELOAD_TRIGGER target for `use_onnx`;
+        on_disable / cleanup delegate here. Guarded so a redundant call is a no-op
+        (the substrate may fire this via reconfigure before a retained init path)."""
+        if self._model is not None:
+            self.logger.info("Releasing Silero VAD model")
+            self._model = None
 
     def _load_audio(
         self,
@@ -265,8 +285,16 @@ class SileroVADPlugin(MediaAnalysisPlugin):
         """Check if Silero VAD is available."""
         return SILERO_AVAILABLE
 
+    def prefetch(self) -> None:
+        """CR-4 (SG-19): eagerly load the model so the first execute() doesn't pay
+        the load cost. Idempotent via _load_model's None-guard."""
+        self._load_model()
+
+    def on_disable(self) -> None:
+        """CR-2: release the model when the operator disables the plugin (the worker
+        stays alive); the model lazily reloads on the next execute after re-enable."""
+        self._release_model()
+
     def cleanup(self) -> None:
-        """Clean up resources."""
-        if self._model is not None:
-            self.logger.info("Unloading Silero VAD model")
-            self._model = None
+        """Release resources on unload."""
+        self._release_model()
