@@ -224,10 +224,15 @@ class SileroVADPlugin(MediaAnalysisPlugin):
 
         # Hash the config for cache keying
         config_hash = hash_dict_canonical(config_to_dict(run_config))
-        
-        # 1. Check Cache
+
+        # Hash the source file (content). Part of the cache lookup so a changed
+        # file misses the cache; the upsert key stays (file_path, config_hash) so
+        # the next save() replaces the stale row rather than accumulating one.
+        file_hash = hash_file(media_path)
+
+        # 1. Check Cache (content-correct: file_path + file_hash + config_hash)
         if not force:
-            cached = self.storage.get_cached(media_path, config_hash)
+            cached = self.storage.get_cached(media_path, file_hash, config_hash)
             if cached:
                 self.logger.info(f"Using cached VAD result for {media_path}")
                 ranges_data = cached.ranges or []
@@ -238,9 +243,6 @@ class SileroVADPlugin(MediaAnalysisPlugin):
 
         # 2. Process
         self._load_model()
-        
-        # Hash the source file before processing
-        file_hash = hash_file(media_path)
         
         # Load Audio
         self.logger.info(f"Processing audio: {media_path}")
@@ -283,7 +285,7 @@ class SileroVADPlugin(MediaAnalysisPlugin):
         
         self.logger.info(f"Detected {len(ranges)} speech segments ({total_speech:.2f}s speech / {duration:.2f}s total)")
 
-        # 3. Save to Cache
+        # 3. Save to Cache (upsert by file_path + config_hash)
         self.storage.save(
             file_path=media_path,
             file_hash=file_hash,

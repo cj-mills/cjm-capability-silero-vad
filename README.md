@@ -21,8 +21,8 @@ Total: 2 notebooks
 
 ``` mermaid
 graph LR
-    meta[meta<br/>Metadata]
-    plugin[plugin<br/>Silero VAD Plugin]
+    meta["meta<br/>Metadata"]
+    plugin["plugin<br/>Silero VAD Plugin"]
 
     plugin --> meta
 ```
@@ -120,7 +120,8 @@ class SileroVADPlugin:
     
     def version(self) -> str:  # Plugin version string
             """Get the plugin version string."""
-            return "1.0.0"
+            from cjm_media_plugin_silero_vad import __version__
+            return __version__
         
         @property
         def supported_media_types(self) -> List[str]:  # Supported media types
@@ -144,7 +145,7 @@ class SileroVADPlugin:
             """Return JSON Schema for UI generation."""
             return dataclass_to_jsonschema(SileroVADConfig)
     
-        def initialize(
+        def _apply_config(
             self,
             config: Optional[Any] = None  # Configuration dataclass, dict, or None
         ) -> None
@@ -154,7 +155,9 @@ class SileroVADPlugin:
             self,
             config: Optional[Any] = None  # Configuration dataclass, dict, or None
         ) -> None
-        "Initialize or re-configure the plugin (idempotent)."
+        "First-time setup. CR-4: config application is factored into _apply_config;
+the substrate's reconfigure(old, new) handles deltas - it fires _release_model
+on a use_onnx change (RELOAD_TRIGGER) then re-applies config."
     
     def execute(
             self,
@@ -168,11 +171,27 @@ class SileroVADPlugin:
             """Check if Silero VAD is available."""
             return SILERO_AVAILABLE
     
-        def cleanup(self) -> None
+        def prefetch(self) -> None
         "Check if Silero VAD is available."
     
-    def cleanup(self) -> None:
-            """Clean up resources."""
-            if self._model is not None
-        "Clean up resources."
+    def prefetch(self) -> None:
+            """CR-4 (SG-19): eagerly load the model so the first execute() doesn't pay
+            the load cost. Idempotent via _load_model's None-guard."""
+            self._load_model()
+    
+        def on_disable(self) -> None
+        "CR-4 (SG-19): eagerly load the model so the first execute() doesn't pay
+the load cost. Idempotent via _load_model's None-guard."
+    
+    def on_disable(self) -> None:
+            """CR-2: release the model when the operator disables the plugin (the worker
+            stays alive); the model lazily reloads on the next execute after re-enable."""
+            self._release_model()
+    
+        def cleanup(self) -> None
+        "CR-2: release the model when the operator disables the plugin (the worker
+stays alive); the model lazily reloads on the next execute after re-enable."
+    
+    def cleanup(self) -> None
+        "Release resources on unload."
 ```
