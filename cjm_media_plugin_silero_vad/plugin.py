@@ -127,7 +127,7 @@ class SileroVADPlugin(MediaAnalysisPlugin):
     @property
     def name(self) -> str:  # Plugin name identifier
         """Get the plugin name identifier."""
-        return "silero-vad"
+        return get_plugin_metadata()["name"]
     
     @property
     def version(self) -> str:  # Plugin version string
