@@ -134,15 +134,16 @@ def run_e2e() -> None:
     t0 = time.time()
     result = asyncio.run(run_job())
 
-    # Result crosses the worker IPC boundary; accept dict-or-object.
-    ranges = result.get("ranges") if isinstance(result, dict) else getattr(result, "ranges", None)
-    meta = result.get("metadata") if isinstance(result, dict) else getattr(result, "metadata", {})
+    # Stage-2 typed wire layer: a typed MediaAnalysisResult arrives (the
+    # import registers the wire kind in this host process).
+    from cjm_media_plugin_system.core import MediaAnalysisResult  # noqa: F401
+    ranges = result.ranges
+    meta = result.metadata
     log.info(f"VAD completed in {time.time() - t0:.1f}s")
     assert ranges, f"No speech ranges detected; raw result={result!r}"
     log.info(f"Detected {len(ranges)} speech segments; metadata={meta}")
     for i, r in enumerate(ranges[:3]):
-        rd = r if isinstance(r, dict) else {"start": getattr(r, "start", None), "end": getattr(r, "end", None)}
-        log.info(f"  [{i}] {rd.get('start')}s - {rd.get('end')}s")
+        log.info(f"  [{i}] {r.start}s - {r.end}s")
 
     # Empirical store: CPU plugin -> expect a row with memory recorded (gpu peak 0).
     # Informational only (not a hard gate for a CPU plugin).
