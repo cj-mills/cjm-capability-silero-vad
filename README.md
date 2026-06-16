@@ -12,22 +12,18 @@ pip install cjm_media_plugin_silero_vad
 ## Project Structure
 
     nbs/
-    ├── meta.ipynb   # Metadata introspection for the Silero VAD plugin used by cjm-ctl to generate the registration manifest.
-    └── plugin.ipynb # Plugin implementation for Voice Activity Detection using Silero VAD with SQLite result caching.
+    └── plugin.ipynb # Pure-compute voice-activity-detection tool capability using Silero VAD (Option C, stage 8).
 
-Total: 2 notebooks
+Total: 1 notebook
 
 ## Module Dependencies
 
 ``` mermaid
 graph LR
-    meta["meta<br/>Metadata"]
     plugin["plugin<br/>Silero VAD Plugin"]
-
-    plugin --> meta
 ```
 
-*1 cross-module dependencies detected*
+No cross-module dependencies detected.
 
 ## CLI Reference
 
@@ -37,40 +33,10 @@ No CLI commands found in this project.
 
 Detailed documentation for each module in the project:
 
-### Metadata (`meta.ipynb`)
-
-> Metadata introspection for the Silero VAD plugin used by cjm-ctl to
-> generate the registration manifest.
-
-#### Import
-
-``` python
-from cjm_media_plugin_silero_vad.meta import (
-    get_plugin_metadata
-)
-```
-
-#### Functions
-
-``` python
-def get_plugin_metadata() -> Dict[str, Any]:  # Plugin metadata for manifest generation
-    """Return metadata required to register this plugin with the PluginManager."""
-    # Fallback base path (current behavior for backward compatibility)
-    base_path = os.path.dirname(os.path.dirname(sys.executable))
-    
-    # Use CJM config if available
-    cjm_data_dir = os.environ.get("CJM_DATA_DIR")
-    
-    # Plugin data directory
-    plugin_name = "cjm-media-plugin-silero-vad"
-    if cjm_data_dir
-    "Return metadata required to register this plugin with the PluginManager."
-```
-
 ### Silero VAD Plugin (`plugin.ipynb`)
 
-> Plugin implementation for Voice Activity Detection using Silero VAD
-> with SQLite result caching.
+> Pure-compute voice-activity-detection tool capability using Silero VAD
+> (Option C, stage 8).
 
 #### Import
 
@@ -92,7 +58,6 @@ class SileroVADConfig:
     min_speech_duration_ms: int = field(...)
     min_silence_duration_ms: int = field(...)
     speech_pad_ms: int = field(...)
-    sampling_rate: int = field(...)
     use_onnx: bool = field(...)
 ```
 
@@ -102,7 +67,17 @@ class SileroVADPlugin:
         """Initialize the Silero VAD plugin."""
         self.logger = logging.getLogger(f"{__name__}.{type(self).__name__}")
         self.config: SileroVADConfig = None
-    "Voice Activity Detection plugin using Silero VAD."
+    """
+    Voice Activity Detection tool capability using Silero VAD (stage 8: pure compute).
+    
+    Native-surface model (PILLAR 1c): this tool is PURE COMPUTE — `detect_speech`
+    reads MODEL-READY audio, runs Silero inference, and builds the typed
+    `VADResult`. The cache-check + persistence bookends + the per-call `force`
+    control live in the generic VAD adapter (cjm-vad-adapter-interface); the
+    result DTO lives in cjm-capability-primitives; identity is derived from the
+    installed distribution. No `get_plugin_metadata`, no `self.storage`, no
+    librosa (decode/resample is upstream ffmpeg, soxr).
+    """
     
     def __init__(self):
             """Initialize the Silero VAD plugin."""
@@ -111,28 +86,22 @@ class SileroVADPlugin:
         "Initialize the Silero VAD plugin."
     
     def name(self) -> str:  # Plugin name identifier
-            """Get the plugin name identifier."""
-            return "silero-vad"
-        
+            """Plugin identity, derived from the installed distribution (PILLAR 1c)."""
+            from importlib.metadata import metadata, packages_distributions
+            dist = (packages_distributions().get(__package__) or [__package__.replace("_", "-")])[0]
+            return metadata(dist)["Name"]
+    
         @property
         def version(self) -> str:  # Plugin version string
-        "Get the plugin name identifier."
+        "Plugin identity, derived from the installed distribution (PILLAR 1c)."
     
     def version(self) -> str:  # Plugin version string
             """Get the plugin version string."""
             from cjm_media_plugin_silero_vad import __version__
             return __version__
-        
-        @property
-        def supported_media_types(self) -> List[str]:  # Supported media types
-        "Get the plugin version string."
-    
-    def supported_media_types(self) -> List[str]:  # Supported media types
-            """Get the list of supported media types."""
-            return ["audio", "video"]
     
         def get_current_config(self) -> Dict[str, Any]:  # Current configuration as dictionary
-        "Get the list of supported media types."
+        "Get the plugin version string."
     
     def get_current_config(self) -> Dict[str, Any]:  # Current configuration as dictionary
             """Return current configuration state."""
@@ -156,16 +125,22 @@ class SileroVADPlugin:
             config: Optional[Any] = None  # Configuration dataclass, dict, or None
         ) -> None
         "First-time setup. CR-4: config application is factored into _apply_config;
-the substrate's reconfigure(old, new) handles deltas - it fires _release_model
-on a use_onnx change (RELOAD_TRIGGER) then re-applies config."
+the substrate's reconfigure(old, new) fires _release_model on a use_onnx
+change (RELOAD_TRIGGER) then re-applies config. No storage init — the
+adapter owns the cache (stage 8)."
     
-    def execute(
+    def detect_speech(
             self,
-            media_path: Union[str, Path],  # Path to media file to analyze
-            force: bool = False,           # If True, ignore cache and re-run
-            **kwargs                       # Override config parameters for this run
-        ) -> MediaAnalysisResult:  # Analysis result with detected speech segments
-        "Run VAD on the audio file."
+            audio: Union[str, Path],  # Path to MODEL-READY audio (mono 8k/16k, converted upstream)
+            **kwargs                  # Provenance pass-through (unused by VAD compute)
+        ) -> VADResult:  # Typed VAD output with detected speech segments
+        "Detect speech segments in model-ready audio — PURE COMPUTE.
+
+Stage 8 / PILLAR 1c: the cache-check + persistence bookends + the per-call
+`force` control moved to the generic VAD adapter; this method reads the
+audio, runs Silero, and builds the typed result. Detection params come
+from `self.config` (no per-call kwarg override — the tool runs its
+effective config)."
     
     def is_available(self) -> bool:  # True if Silero VAD is available
             """Check if Silero VAD is available."""
@@ -175,22 +150,18 @@ on a use_onnx change (RELOAD_TRIGGER) then re-applies config."
         "Check if Silero VAD is available."
     
     def prefetch(self) -> None:
-            """CR-4 (SG-19): eagerly load the model so the first execute() doesn't pay
-            the load cost. Idempotent via _load_model's None-guard."""
+            """CR-4 (SG-19): eagerly load the model so the first call doesn't pay the load cost."""
             self._load_model()
     
         def on_disable(self) -> None
-        "CR-4 (SG-19): eagerly load the model so the first execute() doesn't pay
-the load cost. Idempotent via _load_model's None-guard."
+        "CR-4 (SG-19): eagerly load the model so the first call doesn't pay the load cost."
     
     def on_disable(self) -> None:
-            """CR-2: release the model when the operator disables the plugin (the worker
-            stays alive); the model lazily reloads on the next execute after re-enable."""
+            """CR-2: release the model when the operator disables the plugin (worker stays alive)."""
             self._release_model()
     
         def cleanup(self) -> None
-        "CR-2: release the model when the operator disables the plugin (the worker
-stays alive); the model lazily reloads on the next execute after re-enable."
+        "CR-2: release the model when the operator disables the plugin (worker stays alive)."
     
     def cleanup(self) -> None
         "Release resources on unload."
