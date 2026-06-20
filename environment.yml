@@ -1,4 +1,4 @@
-name: cjm-media-plugin-silero-vad
+name: cjm-capability-silero-vad
 channels:
   - conda-forge
   - defaults
@@ -6,9 +6,9 @@ dependencies:
   - python=3.12
   - pip
   - pip:
-    # Result data noun (VADResult). Substrate (cjm-plugin-system) is
+    # Result data noun (VADResult). Substrate (cjm-substrate) is
     # AUTO-INJECTED by `cjm-ctl install-all` (schema v2), so it is no longer
-    # listed here — same reason it was dropped from plugins.yaml interface_libs.
+    # listed here — same reason it was dropped from capabilitys.yaml interface_libs.
     - cjm-capability-primitives
 
     # Utilities
