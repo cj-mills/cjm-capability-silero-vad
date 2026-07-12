@@ -16,10 +16,7 @@ dependencies = ['cjm-substrate>=0.0.51', 'cjm-capability-primitives>=0.0.10', 's
 
 [project.urls]
 Repository = "https://github.com/cj-mills/cjm-capability-silero-vad"
-Documentation = "https://cj-mills.github.io/cjm-capability-silero-vad"
 
-[project.entry-points.nbdev]
-cjm_capability_silero_vad = "cjm_capability_silero_vad._modidx:d"
 
 [tool.setuptools.dynamic]
 version = {attr = "cjm_capability_silero_vad.__version__"}
@@ -27,4 +24,3 @@ version = {attr = "cjm_capability_silero_vad.__version__"}
 [tool.setuptools.packages.find]
 include = ["cjm_capability_silero_vad*"]
 
-[tool.nbdev]
