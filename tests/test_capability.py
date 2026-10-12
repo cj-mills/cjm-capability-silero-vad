@@ -3,13 +3,13 @@
 Projected from the capability notebook's test cells at the c25780e8 flip
 (hermetic: no model download/inference; the detect_speech path is exercised
 by the e2e harnesses in tests_manual/)."""
+
 from dataclasses import fields
 
 import pytest
-
 from cjm_capability_silero_vad.capability import SileroVADCapability, SileroVADConfig
 from cjm_substrate.core.capability import ToolCapability
-from cjm_substrate.utils.validation import SCHEMA_TITLE, dict_to_config
+from cjm_substrate.utils.validation import dict_to_config, SCHEMA_TITLE
 
 
 def test_capability_identity_and_availability():
