@@ -37,7 +37,7 @@ class SileroVADConfig:
     reads the actual rate from the file and validates it is one Silero
     supports (8k/16k).
     """
-    
+
     threshold: float = field(
         default=0.5,
         metadata={
@@ -46,7 +46,7 @@ class SileroVADConfig:
             SCHEMA_MIN: 0.0, SCHEMA_MAX: 1.0
         }
     )
-    
+
     min_speech_duration_ms: int = field(
         default=250,
         metadata={
@@ -55,7 +55,7 @@ class SileroVADConfig:
             SCHEMA_MIN: 0
         }
     )
-    
+
     min_silence_duration_ms: int = field(
         default=100,
         metadata={
@@ -64,7 +64,7 @@ class SileroVADConfig:
             SCHEMA_MIN: 0
         }
     )
-    
+
     speech_pad_ms: int = field(
         default=30,
         metadata={
@@ -73,7 +73,7 @@ class SileroVADConfig:
             SCHEMA_MIN: 0
         }
     )
-    
+
     use_onnx: bool = field(
         default=True,
         metadata={
